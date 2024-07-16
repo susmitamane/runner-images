@@ -16,6 +16,11 @@ EOF
 
 chmod +x /usr/local/bin/change_hostname.sh
 
+for host in "$(hostname)" "$(hostname -f)"; do
+      echo -e "$(ipconfig getifaddr en0) $(hostname -f) $(hostname -s)" | sudo tee -a /etc/hosts 
+      dscacheutil -q host -a name $(hostname -f)
+done
+
 sudo tee -a /Library/LaunchDaemons/change_hostname.plist > /dev/null <<\EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
