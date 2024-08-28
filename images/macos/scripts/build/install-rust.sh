@@ -19,7 +19,8 @@ echo "Install common tools..."
 rustup component add rustfmt clippy
 
 if is_Monterey; then
-    cargo install --locked bindgen-cli cbindgen cargo-audit cargo-outdated
+    cargo install --locked bindgen-cli cbindgen cargo-audit
+    cargo install cargo-outdated --locked -v
 fi
 
 echo "Cleanup Cargo registry cached data..."
