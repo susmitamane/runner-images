@@ -12,6 +12,9 @@ brew_smart_install "rustup-init"
 echo "Installing Rust language..."
 rustup-init -y --no-modify-path --default-toolchain=stable --profile=minimal
 
+echo "Updating rust"
+rustup update
+
 echo "Initialize environment variables..."
 CARGO_HOME=$HOME/.cargo
 
@@ -19,7 +22,10 @@ echo "Install common tools..."
 rustup component add rustfmt clippy
 
 if is_Monterey; then
-    cargo install bindgen-cli cbindgen cargo-audit cargo-outdated
+    cargo install --locked bindgen-cli 
+    cargo install --locked cbindgen 
+    cargo install --locked cargo-audit
+    cargo install --locked cargo-outdated
 fi
 
 echo "Cleanup Cargo registry cached data..."
