@@ -24,7 +24,7 @@ rustup component add rustfmt clippy
 if is_Monterey; then
     cargo install --locked bindgen-cli 
     cargo install --locked cbindgen 
-    cargo install --locked cargo-audit
+    cargo install --locked cargo-audit --version 0.21.0-pre.0
     cargo install --locked cargo-outdated
 fi
 
