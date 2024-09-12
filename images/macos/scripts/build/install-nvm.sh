@@ -10,17 +10,19 @@ source ~/utils/utils.sh
 
 nvm_version=$(curl "${authString[@]}" -fsSL https://api.github.com/repos/nvm-sh/nvm/releases/latest | jq -r '.tag_name')
 
+
+nvm_version=$(get_toolset_value '.node.nvm_installer')
+if [[ -z $nvm_version || "$nvm_version" == "latest" ]]; then
+    nvm_version=$(curl "${authString[@]}" -fsSL https://api.github.com/repos/nvm-sh/nvm/releases/latest | jq -r '.tag_name')
+fi
+
+if [[ $nvm_version != "v*" ]]; then
+    nvm_version="v${nvm_version}"
+fi
+
 nvm_installer_path=$(download_with_retry "https://raw.githubusercontent.com/nvm-sh/nvm/$nvm_version/install.sh")
 
 if bash $nvm_installer_path; then
-    nvm_exit_code=$?
-    # Adjust the exit code if it's 2, otherwise proceed as usual
-    if [ $nvm_exit_code -eq 2 ]; then
-        echo "The installation script returned exit code 2, modifying it to 0 for compatibility."
-        nvm_exit_code=0
-    fi
-
-    if [ $nvm_exit_code -eq 0 ]; then
     source ~/.bashrc
     nvm --version
     for version in $(get_toolset_value '.node.nvm_versions[]'); do
