@@ -1,10 +1,6 @@
-| Announcements |
-|-|
-| [[All OSes] Android NDK versions <=25 will be removed from images on August 19](https://github.com/actions/runner-images/issues/10342) |
-***
 # Windows Server 2019
 - OS Version: 10.0.17763 Build 6189
-- Image Version: 20240818.1.0
+- Image Version: 20240902.1.0
 
 ## Windows features
 - Windows Subsystem for Linux (WSLv1): Enabled
@@ -14,26 +10,26 @@
 ### Language and Runtime
 - Bash 5.2.26(1)-release
 - Go 1.21.13
-- Julia 1.10.4
-- Kotlin 2.0.10
+- Julia 1.10.5
+- Kotlin 2.0.20
 - LLVM 18.1.8
 - Node 18.20.3
 - Perl 5.32.1
-- PHP 8.3.10
+- PHP 8.3.11
 - Python 3.7.9
 - Ruby 3.0.7p220
 
 ### Package Management
 - Chocolatey 2.3.0
-- Composer 2.7.7
+- Composer 2.7.8
 - Helm 3.15.3
-- Miniconda 24.5.0 (pre-installed on the image but not added to PATH)
+- Miniconda 24.7.1 (pre-installed on the image but not added to PATH)
 - NPM 10.7.0
 - NuGet 6.11.0.119
 - pip 24.0 (python 3.7)
 - Pipx 1.2.1
 - RubyGems 3.2.33
-- Vcpkg (build from commit 2f210a9c1)
+- Vcpkg (build from commit 0f88ecb85)
 - Yarn 1.22.22
 
 #### Environment variables
@@ -44,7 +40,7 @@
 
 ### Project Management
 - Ant 1.10.14
-- Gradle 8.8
+- Gradle 8.10
 - Maven 3.8.7
 - sbt 1.10.1
 
@@ -52,20 +48,20 @@
 - 7zip 24.08
 - aria2 1.37.0
 - azcopy 10.26.0
-- Bazel 7.3.0
+- Bazel 7.3.1
 - Bazelisk 1.19.0
 - Bicep 0.29.47
 - Cabal 3.12.1.0
-- CMake 3.30.2
-- CodeQL Action Bundle 2.18.2
+- CMake 3.30.3
+- CodeQL Action Bundle 2.18.3
 - Docker 26.1.3
 - Docker Compose v2 2.27.1
 - Docker-wincred 0.8.2
 - ghc 9.10.1
 - Git 2.46.0.windows.1
 - Git LFS 3.5.1
-- Google Cloud CLI 488.0.0
-- ImageMagick 7.1.1-36
+- Google Cloud CLI 490.0.0
+- ImageMagick 7.1.1-37
 - InnoSetup 6.3.3
 - jq 1.7.1
 - Kind 0.24.0
@@ -74,12 +70,12 @@
 - gcc 8.1.0
 - gdb 8.1
 - GNU Binutils 2.30
-- Newman 6.2.0
+- Newman 6.2.1
 - NSIS 3.10
 - OpenSSL 1.1.1w
 - Packer 1.11.0
 - Parcel 2.12.0
-- Pulumi 3.129.0
+- Pulumi 3.130.0
 - R 4.4.1
 - Service Fabric SDK 9.1.1436.9590
 - Stack 3.1.1
@@ -92,14 +88,14 @@
 - zstd 1.5.6
 
 ### CLI Tools
-- Alibaba Cloud CLI 3.0.219
-- AWS CLI 2.17.32
-- AWS SAM CLI 1.122.0
+- Alibaba Cloud CLI 3.0.221
+- AWS CLI 2.17.42
+- AWS SAM CLI 1.123.0
 - AWS Session Manager CLI 1.2.650.0
 - Azure CLI 2.63.0
 - Azure DevOps CLI extension 1.0.1
-- Cloud Foundry CLI 8.7.11
-- GitHub CLI 2.54.0
+- Cloud Foundry CLI 8.8.0
+- GitHub CLI 2.55.0
 
 ### Rust Tools
 - Cargo 1.80.1
@@ -108,7 +104,7 @@
 - Rustup 1.27.1
 
 #### Packages
-- bindgen 0.70.0
+- bindgen 0.70.1
 - cargo-audit 0.20.1
 - cargo-outdated 0.15.0
 - cbindgen 0.27.0
@@ -116,14 +112,14 @@
 - Rustfmt 1.7.0
 
 ### Browsers and Drivers
-- Google Chrome 127.0.6533.120
-- Chrome Driver 127.0.6533.119
-- Microsoft Edge 127.0.2651.105
-- Microsoft Edge Driver 127.0.2651.105
-- Mozilla Firefox 129.0.1
+- Google Chrome 128.0.6613.114
+- Chrome Driver 128.0.6613.86
+- Microsoft Edge 128.0.2739.54
+- Microsoft Edge Driver 128.0.2739.54
+- Mozilla Firefox 129.0.2
 - Gecko Driver 0.35.0
 - IE Driver 4.14.0.0
-- Selenium server 4.23.0
+- Selenium server 4.24.0
 
 #### Environment variables
 | Name              | Value                              |
@@ -171,7 +167,7 @@ Note: MSYS2 is pre-installed on image but not added to PATH.
 #### Node.js
 - 16.20.2
 - 18.20.4
-- 20.16.0
+- 20.17.0
 
 #### Python
 - 3.7.9
@@ -182,12 +178,12 @@ Note: MSYS2 is pre-installed on image but not added to PATH.
 - 3.12.5
 
 #### PyPy
-- 2.7.18 [PyPy 7.3.16]
+- 2.7.18 [PyPy 7.3.17]
 - 3.6.12 [PyPy 7.3.3]
 - 3.7.13 [PyPy 7.3.9]
 - 3.8.16 [PyPy 7.3.11]
 - 3.9.19 [PyPy 7.3.16]
-- 3.10.14 [PyPy 7.3.16]
+- 3.10.14 [PyPy 7.3.17]
 
 #### Ruby
 - 3.0.7
@@ -214,7 +210,7 @@ Note: MSYS2 is pre-installed on image but not added to PATH.
 | 5.0.28.0 | MongoDB     | Stopped       | Disabled         |
 
 ### Database tools
-- Azure CosmosDb Emulator 2.14.19.0
+- Azure CosmosDb Emulator 2.14.20.0
 - DacFx 162.3.566.1
 - MySQL 5.7.44.0
 - SQL OLEDB Driver 18.7.4.0
@@ -496,10 +492,10 @@ Note: MSYS2 is pre-installed on image but not added to PATH.
 - Microsoft.AspNetCore.App: 6.0.5, 6.0.26, 6.0.33, 7.0.5, 7.0.20, 8.0.6, 8.0.8
 - Microsoft.NETCore.App: 6.0.5, 6.0.26, 6.0.33, 7.0.5, 7.0.20, 8.0.6, 8.0.8
 - Microsoft.WindowsDesktop.App: 6.0.5, 6.0.26, 6.0.33, 7.0.5, 7.0.20, 8.0.6, 8.0.8
-- nbgv 3.6.141+d2035fb7be
+- nbgv 3.6.143+57d4199a9c
 
 ### PowerShell Tools
-- PowerShell 7.4.4
+- PowerShell 7.4.5
 
 #### Powershell Modules
 - Az: 12.1.0
@@ -507,7 +503,7 @@ Note: MSYS2 is pre-installed on image but not added to PATH.
 - AzureRM: 2.1.0 (Default), 6.13.1
 - Azure (Cached): 3.8.0.zip, 4.2.1.zip, 5.1.1.zip
 - AzureRM (Cached): 3.8.0.zip, 4.2.1.zip, 5.1.1.zip, 6.7.0.zip
-- AWSPowershell: 4.1.637
+- AWSPowershell: 4.1.647
 - DockerMsftProvider: 1.0.0.8
 - MarkdownPS: 1.10
 - Microsoft.Graph: 2.22.0
@@ -527,7 +523,7 @@ All other versions are saved but not installed.
 | Package Name               | Version                                                                                                                                                                                                                                                                                               |
 | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Android Command Line Tools | 8.0                                                                                                                                                                                                                                                                                                   |
-| Android Emulator           | 34.2.16                                                                                                                                                                                                                                                                                               |
+| Android Emulator           | 35.1.20                                                                                                                                                                                                                                                                                               |
 | Android SDK Build-tools    | 35.0.0<br>34.0.0<br>33.0.0 33.0.1 33.0.2 33.0.3<br>32.0.0<br>31.0.0<br>30.0.2                                                                                                                                                                                                                         |
 | Android SDK Platforms      | android-35 (rev 1)<br>android-34-ext8 (rev 1)<br>android-34-ext12 (rev 1)<br>android-34-ext11 (rev 1)<br>android-34-ext10 (rev 1)<br>android-34 (rev 3)<br>android-33-ext5 (rev 1)<br>android-33-ext4 (rev 1)<br>android-33 (rev 3)<br>android-32 (rev 1)<br>android-31 (rev 1)<br>android-30 (rev 3) |
 | Android SDK Platform-Tools | 35.0.2                                                                                                                                                                                                                                                                                                |
@@ -556,4 +552,3 @@ All other versions are saved but not installed.
 | mcr.microsoft.com/dotnet/framework/sdk:4.8-windowsservercore-ltsc2019     | sha256:bfb078e34f8c28cf122fc693b265686a58aa46f7e6c9ee46aaae7371d0ed5772  | 2024-08-13 |
 | mcr.microsoft.com/windows/nanoserver:1809                                 | sha256:7f6649348a11655e3576463fd6d55c29248f97405f8e643cab2409009339f520  | 2024-08-11 |
 | mcr.microsoft.com/windows/servercore:ltsc2019                             | sha256:f67e2252b22f6f8c9916fdcb099548d01b920d49af2039349e1b883f79c9e0ef  | 2024-08-11 |
-
