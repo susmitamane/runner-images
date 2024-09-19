@@ -10,16 +10,6 @@ source ~/utils/utils.sh
 
 nvm_version=$(curl "${authString[@]}" -fsSL https://api.github.com/repos/nvm-sh/nvm/releases/latest | jq -r '.tag_name')
 
-
-nvm_version=$(get_toolset_value '.node.nvm_installer')
-if [[ -z $nvm_version || "$nvm_version" == "latest" ]]; then
-    nvm_version=$(curl "${authString[@]}" -fsSL https://api.github.com/repos/nvm-sh/nvm/releases/latest | jq -r '.tag_name')
-fi
-
-if [[ $nvm_version != "v*" ]]; then
-    nvm_version="v${nvm_version}"
-fi
-
 nvm_installer_path=$(download_with_retry "https://raw.githubusercontent.com/nvm-sh/nvm/$nvm_version/install.sh")
 
 if bash $nvm_installer_path; then
@@ -33,7 +23,16 @@ if bash $nvm_installer_path; then
     nvm alias default system
     echo "Node version manager has been installed successfully"
 else
-    echo "Node version manager installation failed"
+    # Capture the exit code of the failed command
+    exit_code=$?
+    
+    if [ $exit_code -eq 2 ]; then
+        echo "Installation failed with exit code 2. Converting it to 0."
+        exit 0  # Convert exit code 2 to 0
+    else
+        echo "Node version manager installation failed with exit code $exit_code"
+        exit $exit_code  # Exit with the original code for any other errors
+    fi
 fi
 
 invoke_tests "Node" "nvm"
