@@ -1,0 +1,60 @@
+name: macOS Performance Benchmark
+
+on:
+  workflow_dispatch:
+
+jobs:
+  performance:
+    name: macOS Performance Benchmark
+    strategy:
+      matrix:
+        os: [macos-13, macos-13-xlarge, macos-14-large, macos-14-xlarge, macos-15-large, macos-15-xlarge]
+    runs-on: ${{ matrix.os }}
+    steps:
+    
+    - name: Install stress tools (macOS)
+      shell: bash
+      run: |
+        brew install stress-ng
+
+    - name: Run CPU Stress Test
+      shell: bash
+      run: |
+        echo "========================================"
+        echo "🚀 CPU Metrics Test Started"
+        echo "========================================"
+        stress-ng --cpu 4 --cpu-method matrixprod --cpu-ops 200 --metrics-brief --verbose
+        stress-ng --cpu 4 --cpu-method ackermann --cpu-ops 200 --metrics-brief --verbose
+        stress-ng --cpu 4 --cpu-method fibonacci --cpu-ops 200 --metrics-brief --verbose
+        stress-ng --cpu 4 --cpu-method prime --cpu-ops 200 --metrics-brief --verbose
+        stress-ng --cpu 4 --cpu-method sieve --cpu-ops 200 --metrics-brief --verbose
+        stress-ng --cpu 4 --cpu-method bitops --cpu-ops 200 --metrics-brief --verbose
+        echo "========================================"
+        echo "🚀 CPU Metrics Test End"
+        echo "========================================"
+        
+    - name: Check CPU Load Threshold
+      shell: bash
+      run: |
+        echo "Checking CPU Load..."
+        
+        # Get CPU Load Percentage (User + System Load)
+        cpu_load=$(top -l 1 | awk -F'[:,]' '/CPU usage/ {print $2 + $4}' | tr -d ' ')
+
+        echo "🖥️ Current CPU Load: ${cpu_load}%"
+
+        # Check if CPU load exceeds 90%
+        if (( $(echo "$cpu_load > 90" | bc -l) )); then
+          echo "🚨 High CPU Load Detected! ($cpu_load%) Exceeding 90% threshold."
+          exit 1
+        elif (( $(echo "$cpu_load > 70" | bc -l) )); then
+          echo "⚠️ Warning: CPU Load is High ($cpu_load%)"
+        else
+          echo "✅ CPU Load is Normal ($cpu_load%)"
+        fi
+
+    - name: Measure Boot Time
+      shell: bash
+      run: |
+        echo "Checking boot time..."
+        system_profiler SPSoftwareDataType | grep "Time since boot"
