@@ -19,7 +19,7 @@ jobs:
         xcode-version: ${{ matrix.xcode }}
     - name: Install iOS platform
       run: |
-        sudo xcodebuild -downloadPlatform iOS -version 18.2
+        sudo installer -pkg /path/to/iOS_18.2_Simulator.pkg -target /
     - name: Check iOS platform
       shell: powershell
       run: |
