@@ -19,7 +19,7 @@ jobs:
         xcode-version: ${{ matrix.xcode }}
     - name: Install iOS platform
       run: |
-        xcodebuild -downloadPlatform iOS
+        sudo xcodebuild -downloadPlatform iOS -version 18.2
     - name: Check iOS platform
       shell: powershell
       run: |
