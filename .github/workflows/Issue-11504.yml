@@ -1,0 +1,24 @@
+name: Check VisionOS SDK on macos-15-xlarge
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  check-visionos:
+    runs-on: macos-15-xlarge
+
+    steps:
+      - name: Select Xcode 16.2
+        run: sudo xcode-select -switch /Applications/Xcode_16.2.app
+
+      - name: Verify Xcode Version
+        run: xcodebuild -version
+
+      - name: List Available SDKs
+        run: xcodebuild -showsdks
+
+      - name: List Available Destinations
+        run: xcodebuild -showdestinations -scheme DummyScheme || echo "No scheme available"
