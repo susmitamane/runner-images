@@ -8,7 +8,7 @@ on:
 
 jobs:
   check-visionos:
-    runs-on: macos-15-xlarge
+    runs-on: macos-15-large
 
     steps:
       - name: Select Xcode 16.2
