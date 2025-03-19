@@ -1,24 +1,28 @@
-name: Check VisionOS SDK on macos-15-xlarge
+name: Check VisionOS
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
-
+  workflow_dispatch: # Manually trigger the workflowjobs:
 jobs:
-  check-visionos:
-    runs-on: macos-15-large
-
+  check-xcode-VisionOS:
+    runs-on: [ macos-15 ] 
     steps:
-      - name: Select Xcode 16.2
-        run: sudo xcode-select -switch /Applications/Xcode_16.2.app
+    - name: Checkout repository
+      uses: actions/checkout@v2
 
-      - name: Verify Xcode Version
-        run: xcodebuild -version
+    - name: Check Xcode version
+      run: xcodebuild -version
 
-      - name: List Available SDKs
-        run: xcodebuild -showsdks
+    - name: Set up Xcode 16.2
+      run: |
+        XCODE_PATH="/Applications/Xcode_16.2.app/Contents/Developer"
+        if [ -d "$XCODE_PATH" ]; then
+          sudo xcode-select --switch "$XCODE_PATH"
+          echo "Switched to Xcode 16.2"
+        else
+          echo "Xcode 16.2 not found!" && exit 1
+        fi
+    - name: List available SDKs
+      run: xcodebuild -showsdks
 
-      - name: List Available Destinations
-        run: xcodebuild -showdestinations -scheme DummyScheme || echo "No scheme available"
+    - name: List simulators
+      run: xcrun simctl list devices
