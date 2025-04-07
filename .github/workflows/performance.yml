@@ -1,0 +1,776 @@
+name: Memory/CPU/Disk/stress tests production
+
+on:  
+  workflow_dispatch: 
+
+jobs:
+  benchmark-memory-speed:
+    name: macOS Performance Benchmark--Production images 
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-13, macos-14, macos-15]
+
+
+    steps:
+    
+      - name: Install sysbench
+        shell: bash
+        run: brew install sysbench
+  
+      # Description: The Memory Metrics Test is designed to gather and analyze memory-related system metrics on macOS environments. 
+      # It checks total memory, free memory, and memory usage percentage, ensuring enough memory is available for test execution.
+      - name: Memory Metrics Test
+        shell: bash
+        id: memory_metrics
+        run: |
+          echo "========================================"
+          echo "🚀 Memory Metrics Test Started"
+          echo "========================================"
+          
+          # Get total memory directly from macOS system info
+          total_memory_bytes=$(sysctl -n hw.memsize)
+          total_memory_gb=$(sysctl -n hw.memsize | awk '{print $1 / 1024 / 1024 / 1024}')
+          echo "Detected Total Memory: ${total_memory_gb} GB"
+          
+          # Detect correct page size (macOS 15 uses 16K pages)
+          page_size=$(sysctl -n hw.pagesize)
+          echo "Detected Page Size: $page_size bytes"
+          
+          # Get free memory from vm_stat
+          vm_stat_output=$(vm_stat)
+          pages_free=$(echo "$vm_stat_output" | awk '/Pages free/ {gsub("\\.","",$3); print $3}')
+          free_memory_bytes=$((pages_free * page_size))
+          free_memory_mb=$((free_memory_bytes / 1024 / 1024))
+          
+          # Compute used memory correctly
+          used_memory_mb=$(( (total_memory_bytes - free_memory_bytes) / 1024 / 1024 ))
+          
+          # Ensure total memory is valid before calculating percentage
+          if [ "$total_memory_bytes" -gt 0 ]; then
+            used_percentage=$(( (used_memory_mb * 100) / (total_memory_bytes / 1024 / 1024) ))
+          else
+            used_percentage=0
+          fi
+          
+          # Reserve memory for the runner (1GB recommended)
+          runner_reserved_memory_mb=1024  # 1GB reserved for system processes
+          adjusted_memory_mb=$(( (total_memory_bytes / 1024 / 1024) - runner_reserved_memory_mb ))
+          
+          # Ensure adjusted memory does not go below a safe limit (2GB)
+          safe_memory_limit_mb=2048
+          if [ "$adjusted_memory_mb" -lt "$safe_memory_limit_mb" ]; then
+            adjusted_memory_mb=$safe_memory_limit_mb
+          fi
+          
+          # Print memory details
+          echo "🖥️ Total Memory: ${total_memory_gb} GB"
+          echo "🆓 Free Memory: ${free_memory_mb} MB"
+          echo "🔥 Memory Used: ${used_memory_mb} MB"
+          echo "📊 Memory Usage Percentage: $used_percentage%"
+          echo "⚠️ Reserved Memory for Runner: ${runner_reserved_memory_mb} MB"
+          echo "✅ Memory Available for Tests: ${adjusted_memory_mb} MB"
+          
+          # Check if memory usage is too high (above 70%)
+          memory_usage_limit=70
+          if [ "$used_percentage" -gt "$memory_usage_limit" ]; then
+            echo "⚠️ WARNING: Memory usage is above ${memory_usage_limit}%! (${used_percentage}%)"
+            echo "⚠️ Consider reducing memory usage before running tests."
+          fi
+          
+          # Store values in GitHub Actions environment variables
+          echo "TOTAL_MEMORY=$adjusted_memory_mb" >> $GITHUB_ENV
+          echo "USED_PERCENTAGE=$used_percentage" >> $GITHUB_ENV
+  
+  
+      # Description: This test measures system memory read performance using sysbench. 
+      # It verifies that memory read speed meets the expected threshold, ensuring stable system performance for workloads requiring high memory throughput.
+      - name: Benchmark Memory Read Speed
+        shell: bash
+        run: |
+          echo "Benchmarking memory read speed..."
+          
+          START_TIME=$(date +%s)  # Capture start time
+          
+          sysbench memory --memory-block-size=1M --memory-total-size=${{ env.TOTAL_MEMORY }}M --memory-oper=read run | tee benchmark_read.txt
+          
+          END_TIME=$(date +%s)  # Capture end time
+          EXECUTION_TIME=$((END_TIME - START_TIME))  # Calculate elapsed time
+          
+          echo "Execution Time: $EXECUTION_TIME seconds"
+      
+          # Extract throughput value (remove parentheses and keep only the number)
+          THROUGHPUT=$(grep "MiB transferred" benchmark_read.txt | awk -F'[()]' '{print $2}' | awk '{print $1}')
+          
+          # Print extracted value
+          echo "Extracted Memory Read Throughput: ${THROUGHPUT} MB/sec"
+          
+          # Define minimum expected throughput
+          MIN_THROUGHPUT=500
+          
+          # Check if throughput is valid and numeric using bc for floating point comparison
+          if [[ -z "$THROUGHPUT" || ! "$THROUGHPUT" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+              echo "⚠️ Warning: Could not extract a valid memory read speed."
+          elif (( $(echo "$THROUGHPUT < $MIN_THROUGHPUT" | bc -l) )); then
+              echo "⚠️ Warning: Memory read speed is below the expected threshold: ${THROUGHPUT} MB/sec (Expected: ${MIN_THROUGHPUT} MB/sec)"
+          else
+              echo "✅ Memory read speed: ${THROUGHPUT} MB/sec (Threshold: ${MIN_THROUGHPUT} MB/sec)"
+          fi
+              
+          # Export variables for telemetry tracking
+          echo "EXECUTION_TIME=$EXECUTION_TIME" >> $GITHUB_ENV
+          echo "THROUGHPUT=$THROUGHPUT" >> $GITHUB_ENV
+      
+          echo "Benchmark completed!"
+          
+          exit 0  # Ensure script always exits successfully
+  
+  
+  
+     # Description: This test measures system memory write performance using sysbench.
+     # It ensures that memory write speed meets the expected threshold, which is critical for performance-intensive applications.
+      - name: Benchmark Memory Write Speed
+        shell: bash
+        run: |
+          echo "Benchmarking memory write speed..."
+          
+          START_TIME=$(date +%s)  # Capture start time
+          
+          sysbench memory --memory-block-size=1M --memory-total-size=${{ env.TOTAL_MEMORY }}M --memory-oper=write run | tee benchmark_write.txt
+          
+          END_TIME=$(date +%s)  # Capture end time
+          EXECUTION_TIME=$((END_TIME - START_TIME))  # Calculate elapsed time
+          
+          echo "Execution Time: $EXECUTION_TIME seconds"
+      
+          # Extract throughput value (remove parentheses and keep only the number)
+          THROUGHPUT=$(grep "MiB transferred" benchmark_write.txt | awk -F'[()]' '{print $2}' | awk '{print $1}')
+          
+          # Print extracted value
+          echo "Extracted Memory Write Throughput: ${THROUGHPUT} MB/sec"
+          
+          # Define minimum expected throughput
+          MIN_THROUGHPUT=500
+          
+          # Check if throughput is valid and numeric using bc for floating point comparison
+          if [[ -z "$THROUGHPUT" || ! "$THROUGHPUT" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+              echo "⚠️ Warning: Could not extract a valid memory read speed."
+          elif (( $(echo "$THROUGHPUT < $MIN_THROUGHPUT" | bc -l) )); then
+              echo "⚠️ Warning: Memory write speed is below the expected threshold: ${THROUGHPUT} MB/sec (Expected: ${MIN_THROUGHPUT} MB/sec)"
+          else
+              echo "✅ Memory write speed: ${THROUGHPUT} MB/sec (Threshold: ${MIN_THROUGHPUT} MB/sec)"
+          fi
+      
+          # Export variables for telemetry tracking
+          echo "EXECUTION_TIME_WRITE=$EXECUTION_TIME" >> $GITHUB_ENV
+          echo "THROUGHPUT_WRITE=$THROUGHPUT" >> $GITHUB_ENV
+      
+          echo "Benchmark completed!"
+  
+  
+      # Description: This test benchmarks memory performance using a custom block size and total memory size.
+      # It measures throughput and ensures the system meets the minimum required memory performance standards.
+      - name: Customizing Block Size & Total Memory
+        shell: bash
+        run: |
+          echo "============================================"
+          echo "🚀 Starting Memory Benchmark Test with Custom Block Size & Total Memory"
+          echo "============================================"
+      
+          # Define test parameters
+          MEMORY_BLOCK_SIZE="1M"
+          TOTAL_MEMORY="10G"
+          MIN_THROUGHPUT=500  # Minimum acceptable throughput in MB/sec
+      
+          # Run sysbench memory benchmark
+          START_TIME=$(date +%s)
+          sysbench memory --memory-block-size=$MEMORY_BLOCK_SIZE --memory-total-size=$TOTAL_MEMORY run | tee memory_test.txt
+          END_TIME=$(date +%s)
+          EXECUTION_TIME=$((END_TIME - START_TIME))
+      
+          echo "Execution Time: $EXECUTION_TIME seconds"
+      
+          # Extract Memory Throughput (MB/sec)
+          THROUGHPUT=$(grep "MiB transferred" memory_test.txt | awk -F'[()]' '{print $2}' | awk '{print $1}')
+      
+          # Validate throughput extraction
+          if [[ -z "$THROUGHPUT" || ! "$THROUGHPUT" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+              echo "⚠️ Warning: Could not extract a valid memory throughput value."
+              THROUGHPUT=0  # Default to 0 if extraction fails
+          else
+              echo "✅ Extracted Memory Throughput: ${THROUGHPUT} MB/sec"
+          fi
+      
+          # Performance validation check
+          if [[ $(echo "$THROUGHPUT < $MIN_THROUGHPUT" | bc -l) -eq 1 ]]; then
+              echo "⚠️ Warning: Memory throughput ($THROUGHPUT MB/sec) is below the expected threshold ($MIN_THROUGHPUT MB/sec)."
+          else
+              echo "✅ Memory throughput is within acceptable limits."
+          fi
+      
+          # Export metrics for logging
+          echo "EXECUTION_TIME=$EXECUTION_TIME" >> $GITHUB_ENV
+          echo "THROUGHPUT=$THROUGHPUT" >> $GITHUB_ENV
+      
+          echo "============================================"
+          echo "✅ Memory Benchmark Completed"
+          echo "============================================"
+  
+      # Description: This test benchmarks multi-threaded memory performance using 8 concurrent threads. 
+      # It measures both read and write throughput to ensure the system handles parallel memory operations efficiently.
+      - name: Multi-Threaded Memory Test
+        shell: bash
+        run: |
+          echo "============================================"
+          echo "🚀 Starting Multi-Threaded Memory Test (8 Threads)"
+          echo "============================================"
+      
+          # Define test parameters
+          MEMORY_BLOCK_SIZE="1M"
+          TOTAL_MEMORY="${{ env.TOTAL_MEMORY }}M"
+          MIN_THROUGHPUT=500  # Minimum acceptable throughput in MB/sec
+      
+          # Run memory read test
+          echo "📌 Running Multi-Threaded Memory Read Test..."
+          START_TIME=$(date +%s)
+          sysbench memory --memory-block-size=$MEMORY_BLOCK_SIZE --memory-total-size=$TOTAL_MEMORY --memory-oper=read --threads=8 run | tee memory_read.txt
+          END_TIME=$(date +%s)
+          EXECUTION_TIME_READ=$((END_TIME - START_TIME))
+          MEMORY_READ_SPEED=$(grep "MiB transferred" memory_read.txt | awk -F'[()]' '{print $2}' | awk '{print $1}')
+      
+          # Validate read throughput extraction
+          if [[ -z "$MEMORY_READ_SPEED" || ! "$MEMORY_READ_SPEED" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+              echo "⚠️ Warning: Could not extract a valid memory read throughput."
+              MEMORY_READ_SPEED=0
+          else
+              echo "✅ Extracted Multi-Threaded Memory Read Throughput: ${MEMORY_READ_SPEED} MB/sec"
+          fi
+      
+          # Run memory write test
+          echo "📌 Running Multi-Threaded Memory Write Test..."
+          START_TIME=$(date +%s)
+          sysbench memory --memory-block-size=$MEMORY_BLOCK_SIZE --memory-total-size=$TOTAL_MEMORY --memory-oper=write --threads=8 run | tee memory_write.txt
+          END_TIME=$(date +%s)
+          EXECUTION_TIME_WRITE=$((END_TIME - START_TIME))
+          MEMORY_WRITE_SPEED=$(grep "MiB transferred" memory_write.txt | awk -F'[()]' '{print $2}' | awk '{print $1}')
+      
+          # Validate write throughput extraction
+          if [[ -z "$MEMORY_WRITE_SPEED" || ! "$MEMORY_WRITE_SPEED" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+              echo "⚠️ Warning: Could not extract a valid memory write throughput."
+              MEMORY_WRITE_SPEED=0
+          else
+              echo "✅ Extracted Multi-Threaded Memory Write Throughput: ${MEMORY_WRITE_SPEED} MB/sec"
+          fi
+      
+          # Performance validation check for read
+          if [[ $(echo "$MEMORY_READ_SPEED < $MIN_THROUGHPUT" | bc -l) -eq 1 ]]; then
+              echo "⚠️ Warning: Multi-threaded memory read speed ($MEMORY_READ_SPEED MB/sec) is below the expected threshold ($MIN_THROUGHPUT MB/sec)."
+          else
+              echo "✅ Multi-threaded memory read speed is within acceptable limits."
+          fi
+      
+          # Performance validation check for write
+          if [[ $(echo "$MEMORY_WRITE_SPEED < $MIN_THROUGHPUT" | bc -l) -eq 1 ]]; then
+              echo "⚠️ Warning: Multi-threaded memory write speed ($MEMORY_WRITE_SPEED MB/sec) is below the expected threshold ($MIN_THROUGHPUT MB/sec)."
+          else
+              echo "✅ Multi-threaded memory write speed is within acceptable limits."
+          fi
+      
+          # Calculate total execution time
+          TOTAL_EXECUTION_TIME=$((EXECUTION_TIME_READ + EXECUTION_TIME_WRITE))
+      
+          # Export results for further analysis
+          echo "EXECUTION_TIME=$TOTAL_EXECUTION_TIME" >> $GITHUB_ENV
+          echo "THROUGHPUT_READ=$MEMORY_READ_SPEED" >> $GITHUB_ENV
+          echo "THROUGHPUT_WRITE=$MEMORY_WRITE_SPEED" >> $GITHUB_ENV
+      
+          echo "============================================"
+          echo "✅ Multi-Threaded Memory Test Completed"
+          echo "============================================"
+  
+      # Description: This test measures memory read and write performance by running sysbench for a fixed duration of 30 seconds per test. 
+      # It evaluates how the system performs under sustained memory operations using 8 concurrent threads.
+      - name: Running for a Fixed Time
+        shell: bash
+        run: |
+          echo "============================================"
+          echo "🚀 Running Memory Benchmark for a Fixed Time (30 seconds per test)"
+          echo "============================================"
+      
+          # Define test parameters
+          MEMORY_BLOCK_SIZE="1M"
+          THREADS=8
+          TEST_DURATION=30  # Run test for 30 seconds
+          MIN_THROUGHPUT=500  # Minimum acceptable throughput in MB/sec
+      
+          # Run memory read test
+          echo "📌 Running Memory Read Test for $TEST_DURATION seconds..."
+          START_TIME=$(date +%s)
+          sysbench memory --memory-block-size=$MEMORY_BLOCK_SIZE --memory-total-size=0 --memory-oper=read --threads=$THREADS --time=$TEST_DURATION run | tee memory_read_fixed.txt
+          END_TIME=$(date +%s)
+          EXECUTION_TIME_READ=$((END_TIME - START_TIME))
+          MEMORY_READ_SPEED=$(grep "MiB transferred" memory_read_fixed.txt | awk -F'[()]' '{print $2}' | awk '{print $1}')
+      
+          # Validate read throughput extraction
+          if [[ -z "$MEMORY_READ_SPEED" || ! "$MEMORY_READ_SPEED" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+              echo "⚠️ Warning: Could not extract a valid memory read throughput."
+              MEMORY_READ_SPEED=0
+          else
+              echo "✅ Extracted Memory Read Throughput: ${MEMORY_READ_SPEED} MB/sec"
+          fi
+      
+          # Run memory write test
+          echo "📌 Running Memory Write Test for $TEST_DURATION seconds..."
+          START_TIME=$(date +%s)
+          sysbench memory --memory-block-size=$MEMORY_BLOCK_SIZE --memory-total-size=0 --memory-oper=write --threads=$THREADS --time=$TEST_DURATION run | tee memory_write_fixed.txt
+          END_TIME=$(date +%s)
+          EXECUTION_TIME_WRITE=$((END_TIME - START_TIME))
+          MEMORY_WRITE_SPEED=$(grep "MiB transferred" memory_write_fixed.txt | awk -F'[()]' '{print $2}' | awk '{print $1}')
+      
+          # Validate write throughput extraction
+          if [[ -z "$MEMORY_WRITE_SPEED" || ! "$MEMORY_WRITE_SPEED" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+              echo "⚠️ Warning: Could not extract a valid memory write throughput."
+              MEMORY_WRITE_SPEED=0
+          else
+              echo "✅ Extracted Memory Write Throughput: ${MEMORY_WRITE_SPEED} MB/sec"
+          fi
+      
+          # Performance validation check for read
+          if [[ $(echo "$MEMORY_READ_SPEED < $MIN_THROUGHPUT" | bc -l) -eq 1 ]]; then
+              echo "⚠️ Warning: Memory read speed ($MEMORY_READ_SPEED MB/sec) is below the expected threshold ($MIN_THROUGHPUT MB/sec)."
+          else
+              echo "✅ Memory read speed is within acceptable limits."
+          fi
+      
+          # Performance validation check for write
+          if [[ $(echo "$MEMORY_WRITE_SPEED < $MIN_THROUGHPUT" | bc -l) -eq 1 ]]; then
+              echo "⚠️ Warning: Memory write speed ($MEMORY_WRITE_SPEED MB/sec) is below the expected threshold ($MIN_THROUGHPUT MB/sec)."
+          else
+              echo "✅ Memory write speed is within acceptable limits."
+          fi
+      
+          # Calculate total execution time
+          TOTAL_EXECUTION_TIME=$((EXECUTION_TIME_READ + EXECUTION_TIME_WRITE))
+      
+          # Export results for further analysis
+          echo "EXECUTION_TIME=$TOTAL_EXECUTION_TIME" >> $GITHUB_ENV
+          echo "THROUGHPUT_READ=$MEMORY_READ_SPEED" >> $GITHUB_ENV
+          echo "THROUGHPUT_WRITE=$MEMORY_WRITE_SPEED" >> $GITHUB_ENV
+      
+          echo "============================================"
+          echo "✅ Memory Benchmark for Fixed Time Completed"
+          echo "============================================"
+  
+      # Description: This test performs an intensive memory stress test using sysbench to push system memory performance to its limits. 
+      # It writes 100GB of data in 4MB blocks across 16 threads to evaluate system stability, throughput, and resilience under extreme load.
+      - name: Extreme Stress Test
+        shell: bash
+        run: |
+            echo "========================================"
+            echo "⚠️ Running an EXTREME memory stress test! This may take a long time."
+            echo "========================================"
+        
+            # Define test parameters
+            MEMORY_BLOCK_SIZE="4M"
+            TOTAL_MEMORY="100G"
+            THREADS=16
+            MIN_THROUGHPUT=1000  # Minimum acceptable throughput in MB/sec
+        
+            # Start timer
+            START_TIME=$(date +%s)
+        
+            # Run stress test and capture logs
+            sysbench memory --memory-block-size=$MEMORY_BLOCK_SIZE --memory-total-size=$TOTAL_MEMORY --memory-oper=write --threads=$THREADS run | tee memory_stress_test.txt
+            EXIT_STATUS=$?
+        
+            # End timer
+            END_TIME=$(date +%s)
+            EXECUTION_TIME=$((END_TIME - START_TIME))
+        
+            # Check if the test failed
+            if [[ $EXIT_STATUS -ne 0 ]]; then
+                echo "❌ Memory stress test failed due to system limits or OOM (Out of Memory) conditions."
+                THROUGHPUT=0
+            else
+                # Extract Memory Throughput (MB/sec)
+                THROUGHPUT=$(grep "MiB transferred" memory_stress_test.txt | awk -F'[()]' '{print $2}' | awk '{print $1}')
+        
+                # Validate throughput extraction
+                if [[ -z "$THROUGHPUT" || ! "$THROUGHPUT" =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+                    echo "⚠️ Warning: Could not extract a valid memory throughput value."
+                    THROUGHPUT=0
+                else
+                    echo "✅ Extracted Memory Write Throughput: ${THROUGHPUT} MB/sec"
+                fi
+            fi
+        
+            # Performance validation check
+            if [[ $(echo "$THROUGHPUT < $MIN_THROUGHPUT" | bc -l) -eq 1 ]]; then
+                echo "⚠️ Warning: Memory write speed ($THROUGHPUT MB/sec) is below the expected threshold ($MIN_THROUGHPUT MB/sec)."
+            else
+                echo "✅ Memory write speed is within acceptable limits."
+            fi
+        
+            # Store metrics in environment variables
+            echo "EXECUTION_TIME=$EXECUTION_TIME" >> $GITHUB_ENV
+            echo "THROUGHPUT=$THROUGHPUT" >> $GITHUB_ENV
+        
+            echo "========================================"
+            echo "✅ Memory performance validation Completed"
+            echo "========================================" 
+  
+   # ------------------------------- CPU stress Test cases --------------------
+   # Description: These `stress-ng` tests evaluate CPU performance across floating-point operations,recursion depth, integer arithmetic, prime number calculations, and bitwise operations. 
+   # They help assess computational efficiency, stack usage, and memory impact under load. 🚀
+   
+      - name: Install stress tools (macOS)
+        shell: bash
+        run: |
+          brew install stress-ng
+  
+      - name: Run CPU Stress Test
+        shell: bash
+        run: |
+          echo "========================================"
+          echo "🚀 CPU Metrics Test Started"
+          echo "========================================"
+          stress-ng --cpu 4 --cpu-method matrixprod --cpu-ops 200 --metrics-brief --verbose
+          stress-ng --cpu 4 --cpu-method ackermann --cpu-ops 200 --metrics-brief --verbose
+          stress-ng --cpu 4 --cpu-method fibonacci --cpu-ops 200 --metrics-brief --verbose
+          stress-ng --cpu 4 --cpu-method prime --cpu-ops 200 --metrics-brief --verbose
+          stress-ng --cpu 4 --cpu-method sieve --cpu-ops 200 --metrics-brief --verbose
+          stress-ng --cpu 4 --cpu-method bitops --cpu-ops 200 --metrics-brief --verbose
+          echo "========================================"
+          echo "🚀 CPU Metrics Test End"
+          echo "========================================"
+          
+      - name: Check CPU Load Threshold
+        shell: bash
+        run: |
+          echo "Checking CPU Load..."
+          
+          # Get CPU Load Percentage (User + System Load)
+          cpu_load=$(top -l 1 | awk -F'[:,]' '/CPU usage/ {print $2 + $4}' | tr -d ' ')
+  
+          echo "🖥️ Current CPU Load: ${cpu_load}%"
+  
+          # Check if CPU load exceeds 90%
+          if (( $(echo "$cpu_load > 90" | bc -l) )); then
+            echo "🚨 Warning:High CPU Load Detected! ($cpu_load%) Exceeding 90% threshold."
+          elif (( $(echo "$cpu_load > 70" | bc -l) )); then
+            echo "⚠️ Warning: CPU Load is High ($cpu_load%)"
+          else
+            echo "✅ CPU Load is Normal ($cpu_load%)"
+          fi
+          
+    # -------------------------------------------------Disk I/O threshold test cases---------------------------------
+  
+      - name: Install fio and iostat
+        shell: bash
+        run: |
+          # Install fio for I/O testing and iostat for disk stats
+          brew install fio
+        #  brew install sysstat
+  
+      - name: Run sequential write test with fio
+        id: sequential_write
+        shell: bash
+        run: |
+         # Start the sequential write test with fio
+         echo "================================================="
+         echo "🚀 Running sequential write test for Disk I/O 💾..."
+         echo "================================================="
+    
+         # Run fio test and store output - measure Disk I/O speed
+         fio_output=$(fio --name=write_test --rw=write --bs=4k --size=4G --numjobs=$(sysctl -n hw.ncpu))
+  
+         # Display the full output of fio
+         echo "$fio_output"
+  
+         # Extract IOPS, and bandwidth from the fio output
+         WRITE_IOPS=$(echo "$fio_output" | grep 'IOPS' | tail -n 1 | awk '{print $2}')
+         WRITE_BW=$(echo "$fio_output" | grep 'bw=' | tail -n 1 | awk '{print $2}' | sed 's/.$//')  # Remove trailing 'B' for bandwidth
+  
+         # Define thresholds for IOPS
+         IOPS_THRESHOLD=5000   # 5000 IOPS threshold
+  
+         # Output the extracted IOPS, and bandwidth for reference
+         echo "Write IOPS: $WRITE_IOPS"
+         echo "Write Bandwidth: $WRITE_BW MiB/s"
+  
+         # Flag to indicate if performance is below threshold
+         IOPS_OK=true
+  
+         # Check if IOPS falls below the threshold
+         if (( WRITE_IOPS < IOPS_THRESHOLD )); then
+         echo "⚠️ Warning: Write IOPS fell below threshold ($IOPS_THRESHOLD IOPS) with $WRITE_IOPS IOPS"
+         IOPS_OK=false
+         fi
+  
+         # If all thresholds are met, confirm the performance is within limits
+         if $IOPS_OK; then
+         echo "✅ Sequential write performance is within acceptable limits: IOPS: $WRITE_IOPS, Bandwidth: $WRITE_BW MiB/s"
+         else
+         echo "❌ Sequential write performance did not meet acceptable limits."
+         fi
+  
+         # Calculate disk I/O avargae read/writes count
+         echo "====================================================="
+         echo "🚀 Calculating avarge read/writes of disk  💾.."
+         echo "====================================================="
+      
+        
+         # Detect the disk name dynamically
+         disk_name=$(iostat -d | awk 'NR==3 {print $1}')
+        
+         if [ -z "$disk_name" ]; then
+          echo "❌ Error: No disk found!"
+          disk_error=true
+         else
+          disk_error=false
+         fi
+        
+         # Capture iostat output and extract reads/writes if disk was found
+         if [ "$disk_error" = false ]; then
+          iostat -d $disk_name 1 5 | awk -v disk="$disk_name" '
+            BEGIN {reads=0; writes=0; count=0}
+            $1 == disk {reads+=$3; writes+=$4; count++}
+            END {
+              if (count > 0) {
+                print "✅ Average Reads/s:", reads/count, "Average Writes/s:", writes/count;
+              } else {
+                print "❌ Error: No disk activity detected!";
+              }
+            }
+          '
+         else
+          echo "❌ Skipping disk I/O calculations due to missing disk  💾 ."
+         fi
+  
+          
+      #------------------Incremental stress test cases - Memory,CPU,Disk I/O,Memory Read/Write, File system-------------------#
+      ##This section outlines a series of incremental stress tests designed to evaluate the system's performance under increasing load across multiple resources: Memory, CPU, Disk I/O, Memory Read/Write, and File System.##
+      - name: Install stress tools (macOS)
+        shell: bash
+        run: |
+          echo "Checking if stress-ng is already installed..."
+          if ! brew list stress-ng &>/dev/null; then
+            echo "Installing coreutils (for gtimeout)..."
+            brew list coreutils &>/dev/null || brew install coreutils || echo "⚠️ Warning: Failed to install coreutils, continuing..."
+          
+            echo "Installing stress-ng..."
+            if command -v gtimeout &>/dev/null; then
+              gtimeout 300 brew install stress-ng || echo "⚠️ Warning: Failed to install stress-ng, but continuing..."
+            else
+              echo "⚠️ Warning: gtimeout not found, running without timeout..."
+              brew install stress-ng || echo "⚠️ Warning: Failed to install stress-ng, but continuing..."
+            fi
+          else
+            echo "✅ stress-ng is already installed."
+          fi
+       
+      - name: Run Incremental Memory Stress Test
+        shell: bash
+        continue-on-error: true  # Allows next steps to execute even if this one fails
+        run: |
+          VM_OPS_START=200  # Initial value
+          VM_OPS_INCREMENT=100  # Step increment
+          VM_OPS_MAX=3000  # Maximum limit
+          VM_BYTES=2G  # Memory allocation
+          LOG_FILE="stress_test_results.log"
+      
+          echo "Starting incremental memory stress test..." | tee $LOG_FILE
+      
+          for ((vm_ops=$VM_OPS_START; vm_ops<=$VM_OPS_MAX; vm_ops+=$VM_OPS_INCREMENT)); do
+            echo "Running stress-ng with --vm-ops=$vm_ops" | tee -a $LOG_FILE
+      
+            if stress-ng --vm 2 --vm-bytes $VM_BYTES --vm-ops $vm_ops --metrics-brief --verbose; then
+              echo "✅ Passed: --vm-ops=$vm_ops" | tee -a $LOG_FILE
+            else
+              echo "❌ Failed: --vm-ops=$vm_ops" | tee -a $LOG_FILE
+              echo "⚠️ Stopping further increments as failure occurred at --vm-ops=$vm_ops" | tee -a $LOG_FILE
+              break  # Stops increasing vm-ops but allows next workflow steps to run
+            fi
+      
+            echo "---------------------------------------------" | tee -a $LOG_FILE
+          done
+      
+          echo "Stress test completed. Check $LOG_FILE for details." | tee -a $LOG_FILE
+  
+  
+      # Add Incremental CPU Stress Test here
+      - name: Run Incremental CPU Stress Test
+        shell: bash
+        continue-on-error: true  # Allows next steps to execute even if this one fails
+        run: |
+          # Get the number of CPU cores available on the system (for macOS)
+          CPU_CORES=$(sysctl -n hw.physicalcpu)  # macOS command to get the number of physical CPU cores
+          echo "Detected $CPU_CORES CPU cores."
+      
+          # Define the starting and maximum stressors and the increment
+          CPU_CORES_START=2        # Start with 2 CPU stressors
+          CPU_CORES_INCREMENT=2    # Increase by 2 each iteration
+          CPU_CORES_MAX=$((CPU_CORES * 2)) # Maximum number of CPU stressors (set to 2 * number of cores detected)
+      
+          # Set initial operations per stressor. This can be dynamically calculated based on the number of cores.
+          BASE_CPU_OPS=5000         # Base number of operations per stressor for initial low load
+          CPU_OPS=$((BASE_CPU_OPS * CPU_CORES))  # Multiply base operations with the number of cores to increase load with more stressors
+          LOG_FILE="cpu_stress_results.log"  # Log file for results
+      
+          echo "Testing with stressors from $CPU_CORES_START to $CPU_CORES_MAX (based on $CPU_CORES cores)." | tee -a $LOG_FILE
+          echo "Initial operations per stressor: $CPU_OPS" | tee -a $LOG_FILE
+      
+          # Incrementally increase CPU stressors and operations per stressor
+          for ((cpu_cores=$CPU_CORES_START; cpu_cores<=$CPU_CORES_MAX; cpu_cores+=$CPU_CORES_INCREMENT)); do
+              # Adjust operations based on the number of cores for higher load
+              CPU_OPS=$((BASE_CPU_OPS * cpu_cores))  # Increasing number of operations with stressor count
+      
+              echo "Running stress-ng with --cpu $cpu_cores --cpu-ops $CPU_OPS" | tee -a $LOG_FILE
+      
+              # Run the CPU stress test with increasing CPU stressors
+              if stress-ng --cpu $cpu_cores --cpu-method matrixprod --cpu-ops $CPU_OPS --metrics-brief --verbose; then
+                  echo "✅ Passed: --cpu=$cpu_cores with $CPU_OPS operations" | tee -a $LOG_FILE
+              else
+                  echo "❌ Failed: --cpu=$cpu_cores with $CPU_OPS operations" | tee -a $LOG_FILE
+                  echo "⚠️ Stopping further increments as failure occurred at --cpu=$cpu_cores" | tee -a $LOG_FILE
+                  break  # Stop the test if failure occurs
+              fi
+      
+              echo "---------------------------------------------" | tee -a $LOG_FILE
+          done
+      
+          echo "CPU Stress test completed. Check $LOG_FILE for details." | tee -a $LOG_FILE
+  
+  
+      - name: Run Incremental Disk I/O Stress Test
+        shell: bash
+        continue-on-error: true  # Allows next steps to execute even if this one fails
+        run: |
+          # Define test parameters
+          DISK_OPS_START=1000        # Start with 1000 disk operations
+          DISK_OPS_INCREMENT=1000    # Increase by 1000 disk operations each iteration
+          DISK_OPS_MAX=18000        # Maximum number of disk operations (adjust as needed)
+          DISK_SIZE=5G              # Size of the test file to use for stress
+          LOG_FILE="disk_stress_results.log"  # Log file for results
+      
+          echo "Starting incremental disk I/O stress test..." | tee $LOG_FILE
+          
+          # Create an initial test file
+          dd if=/dev/zero of=./testfile bs=1M count=1024 oflag=direct
+          sync  # Ensure disk write is flushed
+      
+          # Loop for disk I/O stress test with increasing operations
+          for ((disk_ops=$DISK_OPS_START; disk_ops<=$DISK_OPS_MAX; disk_ops+=$DISK_OPS_INCREMENT)); do
+              echo "Running disk I/O stress with $disk_ops operations" | tee -a $LOG_FILE
+      
+              # Use dd to stress the disk by writing and reading data
+              dd_output=$(dd if=/dev/zero of=./testfile bs=1M count=$disk_ops oflag=direct 2>&1)
+              sync  # Ensure disk write is flushed
+              sleep 2
+      
+              # Log the dd output
+              echo "$dd_output" | tee -a $LOG_FILE
+              
+              # Measure the performance using iostat to capture disk I/O stats
+              echo "Calculating disk I/O operations..." | tee -a $LOG_FILE
+              iostat_output=$(iostat -d 1 10)
+              echo "$iostat_output" | tee -a $LOG_FILE
+      
+              # Check disk I/O operations (Reads/Writes)
+              iostat_summary=$(iostat -d | awk 'NR>2 {print $1 " reads=" $3 " writes=" $4}')
+              echo "Disk I/O stats for current iteration:" | tee -a $LOG_FILE
+              echo "$iostat_summary" | tee -a $LOG_FILE
+      
+              # Check for performance issues
+              if [[ $dd_output == *"error"* || $iostat_summary == *"NaN"* ]]; then
+                  echo "❌ Failed: disk operations=$disk_ops" | tee -a $LOG_FILE
+                  echo "⚠️ Stopping further increments due to performance issues." | tee -a $LOG_FILE
+                  break  # Stop the test if failure occurs
+              else
+                  echo "✅ Passed: disk operations=$disk_ops" | tee -a $LOG_FILE
+              fi
+      
+              echo "---------------------------------------------" | tee -a $LOG_FILE
+          done
+      
+          # Clean up: remove the test file
+          rm -f ./testfile
+          echo "Disk stress test completed. Check $LOG_FILE for details." | tee -a $LOG_FILE
+  
+  
+          
+      #memory read write stress test
+      - name: Run Incremental Memory Read/Write Stress Test
+        shell: bash
+        continue-on-error: true  # Allows next steps to execute even if this one fails
+        run: |
+          # Define test parameters
+          MEM_OPS_START=1000        # Start with 1000 memory read/write operations
+          MEM_OPS_INCREMENT=1000    # Increase by 1000 operations each iteration
+          MEM_OPS_MAX=20000        # Maximum number of operations
+          MEM_SIZE=2G              # Starting size of memory to stress
+          LOG_FILE="memory_stress_results.log"  # Log file for results
+      
+          echo "Starting incremental memory read/write stress test..." | tee $LOG_FILE
+      
+          # Loop for memory read/write stress test with increasing operations
+          for ((mem_ops=$MEM_OPS_START; mem_ops<=$MEM_OPS_MAX; mem_ops+=$MEM_OPS_INCREMENT)); do
+              echo "Running stress-ng with --vm 2 --vm-bytes $MEM_SIZE --vm-ops $mem_ops" | tee -a $LOG_FILE
+      
+              # Run the memory stress test with increasing memory operations
+              if stress-ng --vm 2 --vm-bytes $MEM_SIZE --vm-ops $mem_ops --metrics-brief --verbose; then
+                  echo "✅ Passed: --vm-ops=$mem_ops with $MEM_SIZE allocated memory" | tee -a $LOG_FILE
+              else
+                  echo "❌ Failed: --vm-ops=$mem_ops with $MEM_SIZE allocated memory" | tee -a $LOG_FILE
+                  echo "⚠️ Stopping further increments as failure occurred at --vm-ops=$mem_ops" | tee -a $LOG_FILE
+                  break  # Stop the test if failure occurs
+              fi
+      
+              echo "---------------------------------------------" | tee -a $LOG_FILE
+          done
+      
+          echo "Memory Read/Write stress test completed. Check $LOG_FILE for details." | tee -a $LOG_FILE
+  
+          
+  
+      # Incremental file system stress test
+      - name: Run Incremental File System Stress Test
+        shell: bash
+        continue-on-error: true  # Allows next steps to execute even if this one fails
+        run: |
+          # Define variables for the incremental file system stress test
+          FALLOCATE_OPS_START=1000         # Initial number of allocate operations
+          FALLOCATE_OPS_INCREMENT=500      # Increment step for allocate operations
+          FALLOCATE_OPS_MAX=8000           # Maximum value for allocate operations
+          LOG_FILE="filesystem_stress_results.log"  # Log file for file system stress test results
+          
+          echo "Starting incremental file system stress test..." | tee $LOG_FILE
+      
+          # Loop through file system allocation increments
+          for ((fallocate_ops=$FALLOCATE_OPS_START; fallocate_ops<=$FALLOCATE_OPS_MAX; fallocate_ops+=$FALLOCATE_OPS_INCREMENT)); do
+            # Print which iteration is being run
+            echo "Running stress-ng with --fallocate-ops=$fallocate_ops" | tee -a $LOG_FILE
+      
+            # Run the file system stress test with the current number of allocate operations
+            if stress-ng --fallocate 2 --fallocate-ops $fallocate_ops --metrics-brief --verbose; then
+              echo "✅ Passed: --fallocate-ops=$fallocate_ops" | tee -a $LOG_FILE  # Log success
+            else
+              echo "❌ Failed: --fallocate-ops=$fallocate_ops" | tee -a $LOG_FILE  # Log failure
+              echo "⚠️ Stopping further increments as failure occurred at --fallocate-ops=$fallocate_ops" | tee -a $LOG_FILE
+              break  # Stop further increments if failure occurs
+            fi
+      
+            echo "---------------------------------------------" | tee -a $LOG_FILE
+          done
+      
+          echo "File system stress test completed. Check $LOG_FILE for details." | tee -a $LOG_FILE
+  
+         
+          
+      - name: Clean up (optional)
+        shell: bash
+        run: |
+          rm -f ./testfile
+  
+    
