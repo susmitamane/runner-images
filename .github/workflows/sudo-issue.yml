@@ -1,0 +1,23 @@
+name: Test Sudo
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  test-sudo:
+    name: Test sudo
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, macos-13, macos-15]
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: testing
+        run: |
+          uname -a
+          sudo cat /etc/sudoers.d/runner
+          sudo echo hi
+          sudo -v
