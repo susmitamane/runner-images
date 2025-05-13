@@ -16,4 +16,4 @@ jobs:
 
       - name: Packer Build
         run:   packer build \
-               macOS-14.arm64.anka.pkr.hcl
+               /images/macos/templates/macOS-14.arm64.anka.pkr.hcl
