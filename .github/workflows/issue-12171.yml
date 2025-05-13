@@ -5,7 +5,7 @@ on:
 
 jobs:
   check-xcode-make:
-    runs-on: [macos-14-large] # Adjust to your organization runner if needed
+    runs-on: [macos-14] # Adjust to your organization runner if needed
 
     steps:
       - name: Checkout Code
