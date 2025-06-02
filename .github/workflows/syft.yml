@@ -1,0 +1,31 @@
+name: Syft
+
+on:
+  workflow_dispatch:
+jobs:
+  test-syft-lower-version:
+    strategy:
+      matrix:
+        os: [macos-13, macos-14, macos-15]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Show system info
+        run: |
+          sw_vers
+          uname -a
+      - name: Install specific Syft version (v0.91.0)
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin v1.26.0
+      - name: Check Syft version
+        run: syft version
+      - name: Run Syft with exclusions
+        run: sudo syft dir:/ -vv -o spdx-json=sbom.json --exclude ./Users --exclude ./System/Volumes --exclude ./private
+        shell: bash
+      - name: Compress SBOM file
+        run: zip sbom.json.zip sbom.json
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ matrix.os }}-syft-v0.91.0
+          path: sbom.json.zip
+          if-no-files-found: warn
